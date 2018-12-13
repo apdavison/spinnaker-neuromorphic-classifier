@@ -11,7 +11,7 @@
 'RECORD_POP_AN':True,
 'DISPLAY_RASTER_PLOT':True,
 'SAVE_RASTER_PLOT_AS_PNG':True,
-'CACHE_DIR':'/home/ad246/SpinnakerClassifier/cache',
+'CACHE_DIR':'spinnaker_classifier_cache',
 'CLASSIFICATION_RESULTS_PATH':'WinningClassesByObservation.csv',
 'CLASS_LABELS_PATH':'ClassLabels.csv',
 'RUN_COMPLETE_FILE':'PynnRunCompleted.txt'
