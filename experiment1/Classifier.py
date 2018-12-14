@@ -124,7 +124,7 @@ def setupLayerRN(params, neuronModel, cell_params, popRateCodeSpikes, popPoissio
     weight = params['WEIGHT_POISSON_TO_CLUSTER_RN']
     delay =  params['DELAY_POISSON_TO_CLUSTER_RN']
     connections = utils.fromList_OneRandomSrcForEachTarget(popPoissionNoiseSource._size,popRN._size,weight,delay)
-    projPoissonToClusterRN = spynnaker.Projection(popPoissionNoiseSource, popRN, spynnaker.FromListConnector(connections), target='excitatory')
+    projPoissonToClusterRN = spynnaker.Projection(popPoissionNoiseSource, popRN, spynnaker.FromListConnector(connections), receptor_type='excitatory')
 
     connections = list()
     for vr in range(numVR):
@@ -133,11 +133,11 @@ def setupLayerRN(params, neuronModel, cell_params, popRateCodeSpikes, popPoissio
         firstIndex = vr * rnClusterSize
         lastIndex = firstIndex + rnClusterSize - 1
         connections += utils.fromList_SpecificNeuronToRange(vr,firstIndex,lastIndex,weight,params['MIN_DELAY_RATECODE_TO_CLUSTER_RN'],params['MAX_DELAY_RATECODE_TO_CLUSTER_RN'])
-        
-    projRateToClusterRN = spynnaker.Projection(popRateCodeSpikes, popRN, spynnaker.FromListConnector(connections), target='excitatory')
-        
 
-#----------------------------------------------------------------------------------------------------------------------------            
+    projRateToClusterRN = spynnaker.Projection(popRateCodeSpikes, popRN, spynnaker.FromListConnector(connections), receptor_type='excitatory')
+
+
+#----------------------------------------------------------------------------------------------------------------------------
 def setupLayerPN(params, neuronModel, cell_params, populationsRN, populationsPN):
     
     #create an projection neuron PN cluster population per VR
@@ -196,8 +196,8 @@ def setupLayerPN(params, neuronModel, cell_params, populationsRN, populationsPN)
  
         connections = utils.fromList_OneToOne_fromRangeToRange(rnStartIdx,rnEndIdx,0,pnEndIdx,weightRNPN,delayRNPN, delayRNPN)
         #print connections
-        projClusterRNToClusterPN = spynnaker.Projection(populationsRN[0], popPN,spynnaker.FromListConnector(connections), target='excitatory')
-            
+        projClusterRNToClusterPN = spynnaker.Projection(populationsRN[0], popPN,spynnaker.FromListConnector(connections), receptor_type='excitatory')
+
         #within this popn only, connect each PN sub-population VR "cluster" to inhibit every other
         if vrPerPop > 1:
             utils.createIntraPopulationWTA(popPN,vrPerPop,weightPNPN,delayPNPN,connectivityPNPN,True)
@@ -234,14 +234,14 @@ def setupLayerAN(params, settings, neuronModel, cell_params, popClassActivation,
                 #Without plasticity, create PNAN FromList connectors using weights saved during learning stage
                 connections = utils.loadListFromFile(getWeightsFilename(settings,'PNAN',pn,an))
                 #print 'Loaded weightsList[',pn,',',an,']',connections
-                projClusterPNToClusterAN = spynnaker.Projection(populationsPN[pn], popClusterAN,spynnaker.FromListConnector(connections), target='excitatory')
+                projClusterPNToClusterAN = spynnaker.Projection(populationsPN[pn], popClusterAN,spynnaker.FromListConnector(connections), receptor_type='excitatory')
 
         if learning:
             #use the class activity input neurons to create correlated activity during learining in the corresponding class cluster
             weight = params['WEIGHT_CLASS_ACTIVITY_TO_CLUSTER_AN']
             connections = utils.fromList_SpecificNeuronToAll(an,anClusterSize,weight,params['MIN_DELAY_CLASS_ACTIVITY_TO_CLUSTER_AN'],params['MAX_DELAY_CLASS_ACTIVITY_TO_CLUSTER_AN'])
-            projClassActivityToClusterAN = spynnaker.Projection(popClassActivation, popClusterAN, spynnaker.FromListConnector(connections), target='excitatory')
-        
+            projClassActivityToClusterAN = spynnaker.Projection(popClassActivation, popClusterAN, spynnaker.FromListConnector(connections), receptor_type='excitatory')
+
     #connect each AN cluster to inhibit every other AN cluster
     utils.createInterPopulationWTA(populationsAN,params['WEIGHT_WTA_AN_AN'],params['DELAY_WTA_AN_AN'],float(params['CONNECTIVITY_WTA_AN_AN']))
 
@@ -261,11 +261,13 @@ def connectClusterPNtoAN(params,popClusterPN,popClusterAN, projLabel=''):
     wMax = float(params['STDP_WMAX_PN_AN']) 
     gainScaling = float(params['STDP_SCALING_PN_AN']) 
     
-    timingDependence = spynnaker.SpikePairRule(tau_plus=tau, tau_minus=tau, nearest=True)
-    weightDependence = spynnaker.AdditiveWeightDependence(w_min=wMin, w_max=wMax, A_plus=gainScaling, A_minus=-gainScaling)
-    stdp_model = spynnaker.STDPMechanism(timing_dependence = timingDependence, weight_dependence = weightDependence)
-    probConnector = spynnaker.FixedProbabilityConnector(connectivity, weights=startWeightPNAN, delays=delayPNAN, allow_self_connections=True)
-    projClusterPNToClusterAN = spynnaker.Projection(popClusterPN, popClusterAN,probConnector,synapse_dynamics = spynnaker.SynapseDynamics(slow = stdp_model), target='excitatory', label=projLabel)
+    timingDependence = spynnaker.SpikePairRule(tau_plus=tau, tau_minus=tau,
+                                               A_plus=gainScaling, A_minus=-gainScaling)  # , nearest=True)  # nearest in PyNN 0.7, or just in sPyNNaker?
+    weightDependence = spynnaker.AdditiveWeightDependence(w_min=wMin, w_max=wMax)
+    stdp_model = spynnaker.STDPMechanism(timing_dependence=timingDependence, weight_dependence=weightDependence,
+                                         weight=startWeightPNAN, delay=delayPNAN)
+    probConnector = spynnaker.FixedProbabilityConnector(connectivity, allow_self_connections=True)
+    projClusterPNToClusterAN = spynnaker.Projection(popClusterPN, popClusterAN,probConnector, synapse_type=stdp_model, receptor_type='excitatory', label=projLabel)
     return projClusterPNToClusterAN
 
 #----------------------------------------------------------------------------------------------------------------------------

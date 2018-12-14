@@ -5,8 +5,6 @@ import sys
 import os.path
 import os
 
-params = eval(open("ModelParams-MNISTClassifier.txt").read())
-settings = eval(open("Settings-MNISTClassifier.txt").read())
 workdir = os.path.dirname(__file__)
 
 params = eval(open(os.path.join(workdir, "ModelParams-MNISTClassifier.txt")).read())

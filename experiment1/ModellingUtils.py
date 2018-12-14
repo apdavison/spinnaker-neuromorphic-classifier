@@ -34,13 +34,14 @@ def coresRequiredPerPop(pop,maxNeuronsPerCore):
 
 #----------------------------------------------------------------------------------------------------------------------------
 def createInterPopulationWTA(populations,weight,delay,connectivity):
-    probConnector = spynnaker.FixedProbabilityConnector(connectivity, weights=weight, delays=delay, allow_self_connections=True)
+    probConnector = spynnaker.FixedProbabilityConnector(connectivity, allow_self_connections=True)
+    syn = spynnaker.StaticSynapse(weight=weight, delay=delay)
     for i in range(len(populations)):
         for j in range(len(populations)):
             if i != j:
-                projInhibitory = spynnaker.Projection(populations[i], populations[j], probConnector, target='inhibitory')
+                projInhibitory = spynnaker.Projection(populations[i], populations[j], probConnector, syn, receptor_type='inhibitory')
     #print ' WTA connections', projInhibitory.getWeights()
-    
+
 #----------------------------------------------------------------------------------------------------------------------------
 # Use a from list connector to generate internal connections that implement a WTA inhibition between N sub-population "clusters"
 def createIntraPopulationWTA(popn,numClusters,weight,delay,connectivity,createSingleProjection):
@@ -57,11 +58,11 @@ def createIntraPopulationWTA(popn,numClusters,weight,delay,connectivity,createSi
                 if (createSingleProjection):
                     allConnections += connections
                 else:
-                    projInhibitory = spynnaker.Projection(popn, popn, spynnaker.FromListConnector(connections), target='inhibitory')
+                    projInhibitory = spynnaker.Projection(popn, popn, spynnaker.FromListConnector(connections), receptor_type='inhibitory')
 
     #print ' WTA connections', projInhibitory.getWeights()
     if (createSingleProjection):
-        projInhibitory = spynnaker.Projection(popn, popn, spynnaker.FromListConnector(allConnections), target='inhibitory')
+        projInhibitory = spynnaker.Projection(popn, popn, spynnaker.FromListConnector(allConnections), receptor_type='inhibitory')
 
 #----------------------------------------------------------------------------------------------------------------------------
 #return a list of neuron to neuron connections from the specfied index to every entry entry in target popn
@@ -117,7 +118,7 @@ def fromList_OneRandomSrcForEachTarget(srcPopSize,targetPopSize,weight,delay):
 def recordPopulations(populationList,enabled):
     if enabled:
         for popn in populationList:
-            popn.record()
+            popn.record('spikes')
 
 #----------------------------------------------------------------------------------------------------------------------------
 def plotAllSpikes(populationList, totalSimulationTime , indexOffset, enabled):
@@ -131,21 +132,27 @@ def plotAllSpikes(populationList, totalSimulationTime , indexOffset, enabled):
     
 #----------------------------------------------------------------------------------------------------------------------------
 def plotSpikes(popn,totalSimulationTime, indexOffset):
-    
-    spikes = popn.getSpikes(compatible_output=True)
-    spikeCount  = spikes.shape[0]
+
+    times = []
+    ids = []
+    for i, spiketrain in enumerate(popn.get_data().segments[0].spiketrains):
+        times.append(spiketrain.magnitude)
+        ids.append(i * np.ones_like(spiketrain.magnitude))
+    spikes = np.hstack(times)
+    ids = np.hstack(ids)
+
+    spikeCount  = spikes.size
     neuronCount = popn._size
     timeWindowMs = totalSimulationTime - 20.0; #it takes around 20ms for any spikes to start in RN custers
     freqHz = (float(spikeCount)/float(neuronCount)) * 1000.0/timeWindowMs #numspikes per second
     #print 'population', popn.getLabel(),': ', neuronCount,'neurons produced', spikeCount,'spikes in ', timeWindowMs, 'ms. Spike Freq (Hz) implied:', freqHz 
 
     #For raster plot of all together, we need to convert neuron ids to be global not local to each pop
-    for j in spikes:
-        j[0]=j[0] + indexOffset
-    
+    spikes += indexOffset
+
     #print spikes
     #plt.plot([i[1] for i in spikes], [i[0] for i in spikes], ".")
-    plt.plot([i[1] for i in spikes], [i[0] for i in spikes], "k,") #black pixels
+    plt.plot(ids, spikes, "k,") #black pixels
     #plt.plot([i[1] for i in spikes], [i[0] for i in spikes], markersize=1,marker='.',color='black')
     
     
@@ -165,7 +172,7 @@ def fromList_convertWeightMatrix(matrix, delay, weight_scale = 1.0):
         return zip(indices[0], indices[1], weights, delays)
 
     # Get indices of non-zero weights
-    non_zero_weights = np.where(matrix != 0.0)
+    non_zero_weights = np.where(~np.isnan(matrix))
 
     # Return connection lists
     return build_list(non_zero_weights)
@@ -182,6 +189,9 @@ def loadListFromFile(filename):
 
 #----------------------------------------------------------------------------------------------------------------------------
 def saveListToFile(myList, filename):
+    save_dir = os.path.dirname(os.path.abspath(filename))
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
     with open(filename, 'w') as f:
         json.dump(myList,f)
         f.close()
